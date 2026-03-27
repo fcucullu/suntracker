@@ -361,18 +361,51 @@ function update() {
 }
 
 function azElToScreen(az, el, heading, W, H) {
-  // Horizontal: delta between sun azimuth and phone heading
-  let delta = (az - heading + 360) % 360;
-  if (delta > 180) delta -= 360;
-  const xPercent = 50 + (delta / 90) * 50;
+  // Convert sun position and phone orientation to 3D vectors,
+  // then project onto the camera plane.
+  const deg2rad = Math.PI / 180;
+  const hFov = 60; // horizontal camera FOV in degrees
+  const vFov = 80; // vertical camera FOV in degrees
 
-  // Vertical: use phone tilt (pitch) to map elevation to screen
-  // pitch = angle phone is looking above horizon
-  // Camera vertical FOV — use wider value for stability
-  const vFov = 80;
-  const lookAngle = pitch !== null ? pitch : 20; // default assume slight tilt up
-  const elDelta = el - lookAngle; // difference between sun elevation and where phone points
-  const yPercent = 50 - (elDelta / (vFov / 2)) * 50;
+  // Sun direction as 3D unit vector (in world coords: X=East, Y=North, Z=Up)
+  const sunAzRad = az * deg2rad;
+  const sunElRad = el * deg2rad;
+  const sx = Math.sin(sunAzRad) * Math.cos(sunElRad);
+  const sy = Math.cos(sunAzRad) * Math.cos(sunElRad);
+  const sz = Math.sin(sunElRad);
+
+  // Camera look direction
+  const camAzRad = heading * deg2rad;
+  const camElRad = (pitch !== null ? pitch : 20) * deg2rad;
+
+  // Camera forward vector
+  const fx = Math.sin(camAzRad) * Math.cos(camElRad);
+  const fy = Math.cos(camAzRad) * Math.cos(camElRad);
+  const fz = Math.sin(camElRad);
+
+  // Camera right vector (perpendicular to forward, in horizontal plane)
+  const rx = Math.cos(camAzRad);
+  const ry = -Math.sin(camAzRad);
+  const rz = 0;
+
+  // Camera up vector (cross product of forward and right, then normalize)
+  let ux = fy * rz - fz * ry;
+  let uy = fz * rx - fx * rz;
+  let uz = fx * ry - fy * rx;
+  const uLen = Math.sqrt(ux*ux + uy*uy + uz*uz);
+  ux /= uLen; uy /= uLen; uz /= uLen;
+
+  // Project sun vector onto camera plane
+  const dot = sx*fx + sy*fy + sz*fz; // depth (how much in front)
+  const projR = sx*rx + sy*ry + sz*rz; // horizontal offset
+  const projU = sx*ux + sy*uy + sz*uz; // vertical offset
+
+  // Convert to screen coordinates using FOV
+  const tanH = Math.tan(hFov/2 * deg2rad);
+  const tanV = Math.tan(vFov/2 * deg2rad);
+
+  const xPercent = 50 + (projR / (dot > 0.01 ? dot : 0.01)) / tanH * 50;
+  const yPercent = 50 - (projU / (dot > 0.01 ? dot : 0.01)) / tanV * 50;
 
   const x = (xPercent / 100) * W;
   const y = Math.max(H * 0.02, Math.min(H * 0.98, (yPercent / 100) * H));

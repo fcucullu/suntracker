@@ -158,9 +158,13 @@ pointer-events:none}
 <script>
 let lat = null, lng = null;
 let heading = null;
-let pitch = null; // device tilt (beta) — degrees from horizontal
-let smoothPitch = null; // smoothed pitch for stable tracking
-let smoothHeading = null; // smoothed heading
+let pitch = null;
+let smoothPitch = null;
+let smoothHeading = null;
+// Gyroscope integration for complementary filter
+let gyroHeading = null;
+let gyroPitch = null;
+let lastGyroTime = null;
 let hasCamera = false;
 let hasOrientation = false;
 let sunCalcLoaded = typeof SunCalc !== 'undefined';
@@ -214,17 +218,23 @@ async function startApp() {
     document.getElementById('noCameraMsg').style.display = 'flex';
   }
 
-  // Request orientation (iOS)
+  // Request orientation + motion (iOS)
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try {
       const perm = await DeviceOrientationEvent.requestPermission();
       if (perm === 'granted') hasOrientation = true;
+    } catch(e) {}
+    try {
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        await DeviceMotionEvent.requestPermission();
+      }
     } catch(e) {}
   } else {
     hasOrientation = true;
   }
 
   if (hasOrientation) {
+    // Compass / orientation data (noisy but absolute)
     window.addEventListener('deviceorientation', (e) => {
       let rawHeading = null;
       if (e.alpha !== null) {
@@ -234,26 +244,62 @@ async function startApp() {
           rawHeading = (360 - e.alpha) % 360;
         }
       }
-      // Smooth heading (handle 360/0 wraparound)
+
+      const rawPitch = e.beta !== null ? (90 - e.beta) : null;
+
+      // Complementary filter: blend gyro (fast, smooth) with compass (accurate long-term)
+      // Alpha = 0.02 means 98% gyro, 2% compass per frame
+      const ALPHA = 0.02;
+
       if (rawHeading !== null) {
         if (smoothHeading === null) {
           smoothHeading = rawHeading;
+          gyroHeading = rawHeading;
         } else {
-          let diff = rawHeading - smoothHeading;
-          if (diff > 180) diff -= 360;
-          if (diff < -180) diff += 360;
-          smoothHeading = (smoothHeading + diff * 0.15 + 360) % 360;
+          // Correct gyro drift toward compass reading
+          let compassDiff = rawHeading - gyroHeading;
+          if (compassDiff > 180) compassDiff -= 360;
+          if (compassDiff < -180) compassDiff += 360;
+          gyroHeading = ((gyroHeading + compassDiff * ALPHA) + 360) % 360;
+          smoothHeading = gyroHeading;
         }
         heading = smoothHeading;
       }
-      // Beta → pitch with smoothing
-      if (e.beta !== null) {
-        const rawPitch = 90 - e.beta;
+
+      if (rawPitch !== null) {
         if (smoothPitch === null) {
           smoothPitch = rawPitch;
+          gyroPitch = rawPitch;
         } else {
-          smoothPitch += (rawPitch - smoothPitch) * 0.1; // heavy smoothing
+          const pitchDiff = rawPitch - gyroPitch;
+          gyroPitch += pitchDiff * ALPHA;
+          smoothPitch = gyroPitch;
         }
+        pitch = smoothPitch;
+      }
+    }, true);
+
+    // Gyroscope data (smooth, relative, no drift correction)
+    window.addEventListener('devicemotion', (e) => {
+      const rot = e.rotationRate;
+      if (!rot || rot.alpha === null) return;
+
+      const now = Date.now();
+      if (lastGyroTime === null) { lastGyroTime = now; return; }
+      const dt = (now - lastGyroTime) / 1000; // seconds
+      lastGyroTime = now;
+      if (dt > 0.5) return; // skip large gaps
+
+      // Integrate gyroscope rotation rates
+      // rotationRate: alpha=yaw(z), beta=pitch(x), gamma=roll(y) in deg/s
+      if (gyroHeading !== null) {
+        gyroHeading = (gyroHeading + rot.alpha * dt + 360) % 360;
+        smoothHeading = gyroHeading;
+        heading = smoothHeading;
+      }
+      if (gyroPitch !== null) {
+        gyroPitch -= rot.beta * dt; // negative because tilting up = positive pitch
+        smoothPitch = gyroPitch;
         pitch = smoothPitch;
       }
     }, true);
@@ -287,8 +333,19 @@ async function startApp() {
   setTimeout(() => document.getElementById('hint').classList.add('hidden'), 5000);
 
   // Start update loop
-  setInterval(update, 1000);
-  update();
+  // Use RAF for smooth overlay, setInterval for data that doesn't need 60fps
+  setInterval(() => {
+    // Update clock + sun calculations every second
+    const now = new Date();
+    document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  }, 1000);
+
+  // Smooth overlay rendering at 60fps
+  function renderLoop() {
+    update();
+    requestAnimationFrame(renderLoop);
+  }
+  renderLoop();
 }
 
 function useManualCoords() {

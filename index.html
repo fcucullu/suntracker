@@ -256,8 +256,8 @@ function drawSkyCompass() {
   ctx.beginPath();
   ctx.arc(C, C, R, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(80, 140, 255, 0.4)';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(80, 140, 255, 0.6)';
+  ctx.lineWidth = 2.5;
   ctx.stroke();
 
   // --- Concentric elevation rings (30°, 60°) ---
@@ -283,18 +283,18 @@ function drawSkyCompass() {
     const a = (angle * Math.PI / 180) + rot - Math.PI / 2;
     const major = label.length === 1;
     // Tick line
-    const r1 = R - (major ? 12 : 6);
-    const r2 = R + 4;
-    ctx.strokeStyle = major ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = major ? 2 : 1;
+    const r1 = R - (major ? 16 : 8);
+    const r2 = R + 6;
+    ctx.strokeStyle = major ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = major ? 3 : 1.5;
     ctx.beginPath();
     ctx.moveTo(C + Math.cos(a) * r1, C + Math.sin(a) * r1);
     ctx.lineTo(C + Math.cos(a) * r2, C + Math.sin(a) * r2);
     ctx.stroke();
     // Label
-    const lr = R + 22;
-    ctx.fillStyle = label === 'N' ? '#f5a623' : (major ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)');
-    ctx.font = (major ? 'bold 16px' : '12px') + ' Rajdhani';
+    const lr = R + 26;
+    ctx.fillStyle = label === 'N' ? '#f5a623' : (major ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)');
+    ctx.font = (major ? 'bold 22px' : '14px') + ' Rajdhani';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, C + Math.cos(a) * lr, C + Math.sin(a) * lr);
@@ -338,8 +338,8 @@ function drawSkyCompass() {
     for (let i = 1; i < points.length; i++) {
       const p0 = points[i-1], p1 = points[i];
       const above = p0.el >= 0 || p1.el >= 0;
-      ctx.strokeStyle = above ? 'rgba(245, 166, 35, 0.5)' : 'rgba(245, 166, 35, 0.15)';
-      ctx.lineWidth = above ? 3 : 1.5;
+      ctx.strokeStyle = above ? 'rgba(245, 166, 35, 0.7)' : 'rgba(245, 166, 35, 0.2)';
+      ctx.lineWidth = above ? 3.5 : 2;
       ctx.setLineDash(above ? [8, 5] : [4, 6]);
       ctx.beginPath();
       ctx.moveTo(p0.x, p0.y);
@@ -362,23 +362,40 @@ function drawSkyCompass() {
       }
     }
 
-    // Sunrise marker
+    // Sunrise marker — big and clear
     const srA = ((SunCalc.getPosition(sunrise,lat,lng).azimuth*180/Math.PI+180)%360) * Math.PI/180 + rot - Math.PI/2;
-    const srR = R;
-    ctx.fillStyle = 'rgba(245,166,35,0.8)';
-    ctx.beginPath();
-    ctx.arc(C+Math.cos(srA)*srR, C+Math.sin(srA)*srR, 5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.font = 'bold 12px Rajdhani';
-    ctx.fillText('🌅 '+formatTime(sunrise), C+Math.cos(srA)*(srR+18), C+Math.sin(srA)*(srR+18));
+    const srX = C+Math.cos(srA)*R, srY = C+Math.sin(srA)*R;
+    // Glow
+    const srGrad = ctx.createRadialGradient(srX, srY, 0, srX, srY, 16);
+    srGrad.addColorStop(0, 'rgba(245,166,35,0.6)');
+    srGrad.addColorStop(1, 'rgba(245,166,35,0)');
+    ctx.fillStyle = srGrad;
+    ctx.beginPath(); ctx.arc(srX, srY, 16, 0, Math.PI*2); ctx.fill();
+    // Dot
+    ctx.fillStyle = '#f5a623';
+    ctx.beginPath(); ctx.arc(srX, srY, 6, 0, Math.PI*2); ctx.fill();
+    // Label
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 15px Rajdhani';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const srLx = C+Math.cos(srA)*(R-28), srLy = C+Math.sin(srA)*(R-28);
+    ctx.fillText('🌅 '+formatTime(sunrise), srLx, srLy);
 
-    // Sunset marker
+    // Sunset marker — big and clear
     const ssA = ((SunCalc.getPosition(sunset,lat,lng).azimuth*180/Math.PI+180)%360) * Math.PI/180 + rot - Math.PI/2;
-    ctx.fillStyle = 'rgba(245,166,35,0.8)';
-    ctx.beginPath();
-    ctx.arc(C+Math.cos(ssA)*R, C+Math.sin(ssA)*R, 5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillText('🌇 '+formatTime(sunset), C+Math.cos(ssA)*(R+18), C+Math.sin(ssA)*(R+18));
+    const ssX = C+Math.cos(ssA)*R, ssY = C+Math.sin(ssA)*R;
+    const ssGrad = ctx.createRadialGradient(ssX, ssY, 0, ssX, ssY, 16);
+    ssGrad.addColorStop(0, 'rgba(245,100,35,0.6)');
+    ssGrad.addColorStop(1, 'rgba(245,100,35,0)');
+    ctx.fillStyle = ssGrad;
+    ctx.beginPath(); ctx.arc(ssX, ssY, 16, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#e87020';
+    ctx.beginPath(); ctx.arc(ssX, ssY, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#e87020';
+    ctx.font = 'bold 15px Rajdhani';
+    const ssLx = C+Math.cos(ssA)*(R-28), ssLy = C+Math.sin(ssA)*(R-28);
+    ctx.fillText('🌇 '+formatTime(sunset), ssLx, ssLy);
   }
 
   // --- Current sun position ---

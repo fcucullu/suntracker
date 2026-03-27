@@ -334,6 +334,16 @@ function update() {
   drawCompass();
 }
 
+function azElToScreen(az, el, heading, W, H) {
+  let delta = (az - heading + 360) % 360;
+  if (delta > 180) delta -= 360;
+  const xPercent = 50 + (delta / 90) * 50;
+  const yPercent = 50 - (el / 90) * 80;
+  const x = (xPercent / 100) * W;
+  const y = Math.max(H * 0.05, Math.min(H * 0.95, (yPercent / 100) * H));
+  return { x, y, xPercent };
+}
+
 function drawOverlay(sunAz, sunEl) {
   const canvas = document.getElementById('overlay');
   if (!canvas || !hasCamera) return;
@@ -342,50 +352,103 @@ function drawOverlay(sunAz, sunEl) {
   const H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 
-  if (heading === null) return;
+  if (heading === null || !lat) return;
 
-  // Calculate delta
-  let delta = (sunAz - heading + 360) % 360;
-  if (delta > 180) delta -= 360;
+  // --- Draw sun trajectory arc ---
+  const now = new Date();
+  const times = SunCalc.getTimes(now, lat, lng);
+  const sunrise = times.sunrise;
+  const sunset = times.sunset;
 
-  const xPercent = 50 + (delta / 90) * 50;
-  const yPercent = 50 - (sunEl / 90) * 80;
-  const x = (xPercent / 100) * W;
-  const y = Math.max(H * 0.05, Math.min(H * 0.95, (yPercent / 100) * H));
+  if (sunrise && sunset && !isNaN(sunrise.getTime()) && !isNaN(sunset.getTime())) {
+    // Sample sun positions every 10 minutes from sunrise to sunset
+    const points = [];
+    const startMs = sunrise.getTime();
+    const endMs = sunset.getTime();
+    const step = 10 * 60 * 1000; // 10 min
 
-  // Only draw if roughly on screen
-  if (xPercent >= -20 && xPercent <= 120) {
+    for (let t = startMs; t <= endMs; t += step) {
+      const d = new Date(t);
+      const p = SunCalc.getPosition(d, lat, lng);
+      const az = (p.azimuth * 180 / Math.PI + 180) % 360;
+      const el = p.altitude * 180 / Math.PI;
+      const scr = azElToScreen(az, el, heading, W, H);
+      points.push({ ...scr, el, time: d });
+    }
+
+    // Draw dotted trajectory
+    if (points.length > 1) {
+      ctx.setLineDash([6, 8]);
+      ctx.strokeStyle = 'rgba(245, 166, 35, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (const pt of points) {
+        if (pt.xPercent >= -30 && pt.xPercent <= 130) {
+          if (!started) { ctx.moveTo(pt.x, pt.y); started = true; }
+          else ctx.lineTo(pt.x, pt.y);
+        } else {
+          started = false;
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw sunrise/sunset markers on the arc
+      const srPos = SunCalc.getPosition(sunrise, lat, lng);
+      const srAz = (srPos.azimuth * 180 / Math.PI + 180) % 360;
+      const srScr = azElToScreen(srAz, 0, heading, W, H);
+      if (srScr.xPercent >= -10 && srScr.xPercent <= 110) {
+        ctx.fillStyle = 'rgba(245, 166, 35, 0.4)';
+        ctx.font = `${11 * (W/400)}px Rajdhani`;
+        ctx.textAlign = 'center';
+        ctx.fillText('🌅 ' + formatTime(sunrise), srScr.x, srScr.y - 8 * (W/400));
+      }
+
+      const ssPos = SunCalc.getPosition(sunset, lat, lng);
+      const ssAz = (ssPos.azimuth * 180 / Math.PI + 180) % 360;
+      const ssScr = azElToScreen(ssAz, 0, heading, W, H);
+      if (ssScr.xPercent >= -10 && ssScr.xPercent <= 110) {
+        ctx.fillStyle = 'rgba(245, 166, 35, 0.4)';
+        ctx.font = `${11 * (W/400)}px Rajdhani`;
+        ctx.textAlign = 'center';
+        ctx.fillText('🌇 ' + formatTime(sunset), ssScr.x, ssScr.y - 8 * (W/400));
+      }
+    }
+  }
+
+  // --- Draw current sun position ---
+  const scr = azElToScreen(sunAz, sunEl, heading, W, H);
+
+  if (scr.xPercent >= -20 && scr.xPercent <= 120) {
     const r = 20 * (W / 400);
 
     if (sunEl <= 0) {
-      // Below horizon — dashed circle
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = 'rgba(245, 166, 35, 0.6)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.arc(scr.x, scr.y, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      // Label
       ctx.fillStyle = 'rgba(245, 166, 35, 0.7)';
       ctx.font = `${12 * (W/400)}px Rajdhani`;
       ctx.textAlign = 'center';
-      ctx.fillText('↓ Below horizon', x, y + r + 16 * (W/400));
+      ctx.fillText('↓ Below horizon', scr.x, scr.y + r + 16 * (W/400));
     } else {
       // Glowing sun dot
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 2);
+      const grad = ctx.createRadialGradient(scr.x, scr.y, 0, scr.x, scr.y, r * 2);
       grad.addColorStop(0, 'rgba(245, 166, 35, 0.9)');
       grad.addColorStop(0.3, 'rgba(245, 166, 35, 0.4)');
       grad.addColorStop(1, 'rgba(245, 166, 35, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, r * 2, 0, Math.PI * 2);
+      ctx.arc(scr.x, scr.y, r * 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Core
       ctx.fillStyle = '#f5a623';
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
+      ctx.arc(scr.x, scr.y, r * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
   }

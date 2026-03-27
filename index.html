@@ -82,7 +82,6 @@ pointer-events:none}
     <div>📍 <span id="locationName">Locating...</span></div>
     <div id="clock">--:--:--</div>
   </div>
-  <div id="debugInfo" style="padding:2px 16px;font-size:10px;color:rgba(255,255,255,0.3);font-family:var(--font-num)">compass: --</div>
 
   <div class="sky-compass">
     <canvas id="skyCanvas" width="720" height="720"></canvas>
@@ -92,26 +91,28 @@ pointer-events:none}
     </div>
   </div>
 
-  <div class="stats">
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Azimuth</div>
-        <div class="stat-value" id="azimuthVal">--</div>
-        <div class="stat-sub" id="azimuthDir">--</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Elevation</div>
-        <div class="stat-value" id="elevationVal">--</div>
-        <div class="stat-sub" id="elevationSub">--</div>
-      </div>
+  <!-- Day selector -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 16px">
+    <button onclick="changeDay(-1)" style="background:none;border:1px solid rgba(255,255,255,0.1);color:var(--muted);width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer">←</button>
+    <div style="text-align:center;min-width:120px">
+      <div id="dayLabel" style="font-family:var(--font-num);font-size:16px;font-weight:700;color:#e8e8ec">Today</div>
+      <div id="dateLabel" style="font-family:var(--font-num);font-size:12px;color:var(--muted)">--</div>
     </div>
+    <button onclick="changeDay(1)" style="background:none;border:1px solid rgba(255,255,255,0.1);color:var(--muted);width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer">→</button>
+  </div>
 
+  <div class="stats">
     <div class="info-card">
       <div class="sunrise-sunset">
         <div class="ss-item">
           <div class="ss-icon">🌅</div>
           <div class="ss-time" id="sunriseTime">--:--</div>
           <div class="ss-dir" id="sunriseDir">--</div>
+        </div>
+        <div class="ss-item" style="border-left:1px solid rgba(255,255,255,0.06);border-right:1px solid rgba(255,255,255,0.06)">
+          <div class="ss-icon">☀️</div>
+          <div class="ss-time" id="dayLength">--:--</div>
+          <div class="ss-dir" id="dayDelta">daylight</div>
         </div>
         <div class="ss-item">
           <div class="ss-icon">🌇</div>
@@ -124,6 +125,10 @@ pointer-events:none}
     <div class="info-card golden-hour" id="goldenHour">
       🌙 Golden Hour: <span>--</span>
     </div>
+
+    <a href="https://franciscocucullu.com/apps" target="_blank" class="info-card" style="display:block;text-align:center;text-decoration:none;color:var(--muted);font-size:13px;font-family:var(--font-label)">
+      🚀 More Apps
+    </a>
   </div>
 
   <div class="manual-input" id="manualInput" style="display:none">
@@ -137,7 +142,8 @@ pointer-events:none}
 <script>
 let lat = null, lng = null;
 let heading = null;
-let phoneBeta = null; // phone tilt angle
+let phoneBeta = null;
+let dayOffset = 0; // 0 = today, -1 = yesterday, +1 = tomorrow
 const sunCalcLoaded = typeof SunCalc !== 'undefined';
 
 function toCardinal(deg) {
@@ -172,11 +178,6 @@ async function startApp() {
     }
     if (e.beta !== null) phoneBeta = e.beta;
 
-    // Debug display
-    const dbg = document.getElementById('debugInfo');
-    if (dbg) {
-      dbg.textContent = `α:${e.alpha?.toFixed(1)} abs:${e.absolute} webkit:${e.webkitCompassHeading?.toFixed(1) ?? 'n/a'} → heading:${heading?.toFixed(1)} β:${e.beta?.toFixed(1)}`;
-    }
   }
 
   // Prefer absolute orientation (Android)
@@ -230,9 +231,34 @@ async function reverseGeocode(la, ln) {
   } catch(e) { document.getElementById('locationName').textContent = la.toFixed(2)+', '+ln.toFixed(2); }
 }
 
+function getSelectedDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  return d;
+}
+
+function changeDay(dir) {
+  dayOffset += dir;
+  updateDayLabel();
+  updateSunTimes();
+}
+
+function updateDayLabel() {
+  const d = getSelectedDate();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  document.getElementById('dateLabel').textContent = days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()];
+  if (dayOffset === 0) document.getElementById('dayLabel').textContent = 'Today';
+  else if (dayOffset === 1) document.getElementById('dayLabel').textContent = 'Tomorrow';
+  else if (dayOffset === -1) document.getElementById('dayLabel').textContent = 'Yesterday';
+  else document.getElementById('dayLabel').textContent = (dayOffset > 0 ? '+' : '') + dayOffset + ' days';
+}
+
 function updateSunTimes() {
   if (!lat || !sunCalcLoaded) return;
-  const times = SunCalc.getTimes(new Date(), lat, lng);
+  updateDayLabel();
+  const date = getSelectedDate();
+  const times = SunCalc.getTimes(date, lat, lng);
   document.getElementById('sunriseTime').textContent = formatTime(times.sunrise);
   document.getElementById('sunsetTime').textContent = formatTime(times.sunset);
   const srP = SunCalc.getPosition(times.sunrise, lat, lng);
@@ -241,6 +267,26 @@ function updateSunTimes() {
   const ssAz = (ssP.azimuth*180/Math.PI+180)%360;
   document.getElementById('sunriseDir').textContent = toCardinal(srAz)+' '+srAz.toFixed(1)+'°';
   document.getElementById('sunsetDir').textContent = toCardinal(ssAz)+' '+ssAz.toFixed(1)+'°';
+
+  // Day length
+  if (times.sunrise && times.sunset && !isNaN(times.sunrise.getTime())) {
+    const diffMs = times.sunset.getTime() - times.sunrise.getTime();
+    const hours = Math.floor(diffMs / 3600000);
+    const mins = Math.floor((diffMs % 3600000) / 60000);
+    document.getElementById('dayLength').textContent = hours + 'h ' + pad(mins) + 'm';
+
+    // Compare to previous day
+    const yesterday = new Date(date);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yTimes = SunCalc.getTimes(yesterday, lat, lng);
+    const yDiff = yTimes.sunset.getTime() - yTimes.sunrise.getTime();
+    const delta = Math.round((diffMs - yDiff) / 60000); // minutes difference
+    if (delta > 0) document.getElementById('dayDelta').textContent = '+' + delta + ' min vs prev day';
+    else if (delta < 0) document.getElementById('dayDelta').textContent = delta + ' min vs prev day';
+    else document.getElementById('dayDelta').textContent = 'same as prev day';
+  }
+
+  // Golden hour
   const gh = times.goldenHour;
   if (gh && !isNaN(gh.getTime())) document.getElementById('goldenHour').innerHTML = '🌙 Golden Hour: <span>'+formatTime(gh)+' – '+formatTime(times.sunset)+'</span>';
 }
@@ -248,16 +294,6 @@ function updateSunTimes() {
 function updateClock() {
   const now = new Date();
   document.getElementById('clock').textContent = pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
-  if (!lat || !sunCalcLoaded) return;
-  const pos = SunCalc.getPosition(now, lat, lng);
-  const az = (pos.azimuth*180/Math.PI+180)%360;
-  const el = pos.altitude*180/Math.PI;
-  const azEl = document.getElementById('azimuthVal');
-  const elEl = document.getElementById('elevationVal');
-  azEl.textContent = az.toFixed(1)+'°'; flash(azEl);
-  elEl.textContent = el.toFixed(1)+'°'; flash(elEl);
-  document.getElementById('azimuthDir').textContent = toCardinal(az);
-  document.getElementById('elevationSub').textContent = el > 0 ? 'above horizon' : 'below horizon';
 }
 
 function drawSkyCompass() {
@@ -333,9 +369,10 @@ function drawSkyCompass() {
 
   if (!lat || !sunCalcLoaded) return;
 
-  // --- Sun trajectory arc ---
+  // --- Sun trajectory arc (for selected day) ---
+  const selectedDate = getSelectedDate();
   const now = new Date();
-  const times = SunCalc.getTimes(now, lat, lng);
+  const times = SunCalc.getTimes(selectedDate, lat, lng);
   const sunrise = times.sunrise;
   const sunset = times.sunset;
 
@@ -419,7 +456,8 @@ function drawSkyCompass() {
     ctx.fillText('🌇 '+formatTime(sunset), ssLx, ssLy);
   }
 
-  // --- Current sun position ---
+  // --- Current sun position (only show for today) ---
+  if (dayOffset !== 0) { ctx.fillStyle='rgba(255,255,255,0.08)';ctx.font='11px Rajdhani';ctx.textAlign='center';ctx.fillText('ZENITH',C,C+4); return; }
   const sunPos = SunCalc.getPosition(now, lat, lng);
   const sunAz = (sunPos.azimuth * 180 / Math.PI + 180) % 360;
   const sunEl = sunPos.altitude * 180 / Math.PI;

@@ -1,9 +1,9 @@
 {
-  "github_repo": "fcucullu/suntracker",
-  "vercel_project_name": "suntracker",
-  "subdomain": "suntracker",
+  "github_repo": "fcucullu/sunpath",
+  "vercel_project_name": "sunpath",
+  "subdomain": "sunpath",
   "domain": "franciscocucullu.com",
-  "portfolio_title": "Sun Tracker",
+  "portfolio_title": "SunPath",
   "portfolio_description": "See where the sun is, right now. Live camera overlay with sun position, compass heading, sunrise/sunset times, and golden hour countdown.",
   "portfolio_tags": ["Vanilla JS", "PWA"],
   "portfolio_img": "/assets/stock-1.jpg"

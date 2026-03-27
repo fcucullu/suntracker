@@ -2,7 +2,7 @@
   <span style="font-size:80px">☀️</span>
 </p>
 
-# Sun Tracker
+# SunPath
 
 **See where the sun is, right now.**
 
@@ -12,7 +12,7 @@ Photographers need to know exactly where the sun will be for golden hour. Hikers
 
 ## The Solution
 
-Sun Tracker is a mobile-first PWA that shows the sun's exact position in real-time, overlaid on your phone's camera feed. Point your phone at the sky and see a glowing indicator where the sun actually is. Get live azimuth, elevation, sunrise/sunset times with compass directions, and golden hour countdown.
+SunPath is a mobile-first PWA that shows the sun's exact position in real-time, overlaid on your phone's camera feed. Point your phone at the sky and see a glowing indicator where the sun actually is. Get live azimuth, elevation, sunrise/sunset times with compass directions, and golden hour countdown.
 
 ## Who It's For
 
@@ -39,7 +39,7 @@ Pure HTML + CSS + Vanilla JS, SunCalc, Geolocation API, DeviceOrientation API, g
 
 ## Live
 
-https://suntracker.franciscocucullu.com
+https://sunpath.franciscocucullu.com
 
 ---
 

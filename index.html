@@ -82,6 +82,7 @@ pointer-events:none}
     <div>📍 <span id="locationName">Locating...</span></div>
     <div id="clock">--:--:--</div>
   </div>
+  <div id="debugInfo" style="padding:2px 16px;font-size:10px;color:rgba(255,255,255,0.3);font-family:var(--font-num)">compass: --</div>
 
   <div class="sky-compass">
     <canvas id="skyCanvas" width="720" height="720"></canvas>
@@ -163,16 +164,19 @@ async function startApp() {
   // Falls back to 'deviceorientation' with webkitCompassHeading on iOS
   function handleOrientation(e) {
     if (e.webkitCompassHeading !== undefined) {
-      // iOS: webkitCompassHeading is degrees from North, clockwise
       heading = e.webkitCompassHeading;
-    } else if (e.alpha !== null && e.absolute) {
-      // Android absolute: alpha is degrees from North, counterclockwise
-      heading = (360 - e.alpha) % 360;
     } else if (e.alpha !== null) {
-      // Android non-absolute: alpha is relative (unreliable for compass)
-      heading = (360 - e.alpha) % 360;
+      // Android: try both absolute and relative
+      // absolute: alpha = degrees from North, but direction varies by device
+      heading = e.alpha;
     }
     if (e.beta !== null) phoneBeta = e.beta;
+
+    // Debug display
+    const dbg = document.getElementById('debugInfo');
+    if (dbg) {
+      dbg.textContent = `α:${e.alpha?.toFixed(1)} abs:${e.absolute} webkit:${e.webkitCompassHeading?.toFixed(1) ?? 'n/a'} → heading:${heading?.toFixed(1)} β:${e.beta?.toFixed(1)}`;
+    }
   }
 
   // Prefer absolute orientation (Android)

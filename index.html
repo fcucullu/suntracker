@@ -54,7 +54,7 @@ pointer-events:none}
 .camera-wrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .camera-wrap .hint{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:13px;color:rgba(255,255,255,0.5);font-family:var(--font-label);transition:opacity 1s;z-index:5}
 .camera-wrap .hint.hidden{opacity:0}
-.horizon-line{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,0.15);z-index:4;pointer-events:none}
+.horizon-line{position:absolute;left:0;right:0;height:2px;background:rgba(80,140,255,0.5);z-index:4;pointer-events:none;box-shadow:0 0 8px rgba(80,140,255,0.3)}
 .no-camera{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-family:var(--font-label);font-size:14px;text-align:center;padding:20px}
 
 /* Compass rose */
@@ -109,7 +109,7 @@ pointer-events:none}
   <div class="camera-wrap" id="cameraWrap">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
-    <div class="horizon-line"></div>
+    <div class="horizon-line" id="horizonLine"></div>
     <div class="hint" id="hint">↑ Point phone toward sun</div>
     <div class="compass-rose"><canvas id="compassCanvas" width="120" height="120"></canvas></div>
   </div>
@@ -159,6 +159,8 @@ pointer-events:none}
 let lat = null, lng = null;
 let heading = null;
 let pitch = null; // device tilt (beta) — degrees from horizontal
+let smoothPitch = null; // smoothed pitch for stable tracking
+let smoothHeading = null; // smoothed heading
 let hasCamera = false;
 let hasOrientation = false;
 let sunCalcLoaded = typeof SunCalc !== 'undefined';
@@ -224,18 +226,35 @@ async function startApp() {
 
   if (hasOrientation) {
     window.addEventListener('deviceorientation', (e) => {
+      let rawHeading = null;
       if (e.alpha !== null) {
         if (e.webkitCompassHeading !== undefined) {
-          heading = e.webkitCompassHeading;
+          rawHeading = e.webkitCompassHeading;
         } else {
-          heading = (360 - e.alpha) % 360;
+          rawHeading = (360 - e.alpha) % 360;
         }
       }
-      // Beta = front-back tilt. When phone is vertical (portrait), beta ≈ 90.
-      // When pointing at horizon, beta ≈ 90. Pointing at sky, beta ≈ 0.
-      // Camera "look angle" above horizon = 90 - beta
+      // Smooth heading (handle 360/0 wraparound)
+      if (rawHeading !== null) {
+        if (smoothHeading === null) {
+          smoothHeading = rawHeading;
+        } else {
+          let diff = rawHeading - smoothHeading;
+          if (diff > 180) diff -= 360;
+          if (diff < -180) diff += 360;
+          smoothHeading = (smoothHeading + diff * 0.15 + 360) % 360;
+        }
+        heading = smoothHeading;
+      }
+      // Beta → pitch with smoothing
       if (e.beta !== null) {
-        pitch = 90 - e.beta; // 0 = looking at horizon, 90 = looking straight up
+        const rawPitch = 90 - e.beta;
+        if (smoothPitch === null) {
+          smoothPitch = rawPitch;
+        } else {
+          smoothPitch += (rawPitch - smoothPitch) * 0.1; // heavy smoothing
+        }
+        pitch = smoothPitch;
       }
     }, true);
   }
@@ -349,8 +368,8 @@ function azElToScreen(az, el, heading, W, H) {
 
   // Vertical: use phone tilt (pitch) to map elevation to screen
   // pitch = angle phone is looking above horizon
-  // Camera vertical FOV ≈ 50-60 degrees, use 55 as estimate
-  const vFov = 55;
+  // Camera vertical FOV — use wider value for stability
+  const vFov = 80;
   const lookAngle = pitch !== null ? pitch : 20; // default assume slight tilt up
   const elDelta = el - lookAngle; // difference between sun elevation and where phone points
   const yPercent = 50 - (elDelta / (vFov / 2)) * 50;
@@ -370,6 +389,13 @@ function drawOverlay(sunAz, sunEl) {
 
   if (heading === null || !lat) return;
 
+  // --- Update horizon line position ---
+  const horizonScr = azElToScreen(0, 0, heading, W, H);
+  const horizonEl = document.getElementById('horizonLine');
+  if (horizonEl) {
+    horizonEl.style.top = horizonScr.y + 'px';
+  }
+
   // --- Draw sun trajectory arc ---
   const now = new Date();
   const times = SunCalc.getTimes(now, lat, lng);
@@ -377,11 +403,11 @@ function drawOverlay(sunAz, sunEl) {
   const sunset = times.sunset;
 
   if (sunrise && sunset && !isNaN(sunrise.getTime()) && !isNaN(sunset.getTime())) {
-    // Sample sun positions every 10 minutes from sunrise to sunset
+    // Sample sun positions: 1h before sunrise to 1h after sunset (shows below-horizon trajectory)
     const points = [];
-    const startMs = sunrise.getTime();
-    const endMs = sunset.getTime();
-    const step = 10 * 60 * 1000; // 10 min
+    const startMs = sunrise.getTime() - 60 * 60 * 1000;
+    const endMs = sunset.getTime() + 60 * 60 * 1000;
+    const step = 5 * 60 * 1000; // 5 min for smoother curve
 
     for (let t = startMs; t <= endMs; t += step) {
       const d = new Date(t);
@@ -392,30 +418,30 @@ function drawOverlay(sunAz, sunEl) {
       points.push({ ...scr, el, time: d });
     }
 
-    // Draw visible dotted trajectory
+    // Draw visible dotted trajectory (above + below horizon)
     if (points.length > 1) {
-      // Glow effect — wider faint line behind
+      // Draw segments with different opacity above/below horizon
       ctx.setLineDash([8, 6]);
-      ctx.strokeStyle = 'rgba(245, 166, 35, 0.15)';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      let started = false;
-      for (const pt of points) {
-        if (!started) { ctx.moveTo(pt.x, pt.y); started = true; }
-        else ctx.lineTo(pt.x, pt.y);
-      }
-      ctx.stroke();
+      for (let i = 1; i < points.length; i++) {
+        const p0 = points[i-1], p1 = points[i];
+        const aboveHorizon = p0.el >= 0 || p1.el >= 0;
 
-      // Main dotted line — bright and thick
-      ctx.strokeStyle = 'rgba(245, 166, 35, 0.6)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      started = false;
-      for (const pt of points) {
-        if (!started) { ctx.moveTo(pt.x, pt.y); started = true; }
-        else ctx.lineTo(pt.x, pt.y);
+        // Glow
+        ctx.strokeStyle = aboveHorizon ? 'rgba(245, 166, 35, 0.15)' : 'rgba(245, 166, 35, 0.06)';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+
+        // Main line
+        ctx.strokeStyle = aboveHorizon ? 'rgba(245, 166, 35, 0.6)' : 'rgba(245, 166, 35, 0.2)';
+        ctx.lineWidth = aboveHorizon ? 3 : 2;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
       }
-      ctx.stroke();
       ctx.setLineDash([]);
 
       // Draw hour markers along the path

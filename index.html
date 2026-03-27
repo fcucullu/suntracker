@@ -35,7 +35,7 @@ pointer-events:none}
 #splash button{background:var(--amber);color:#0a0a0f;border:none;padding:14px 40px;border-radius:12px;font-family:var(--font-num);font-size:18px;font-weight:700;cursor:pointer}
 .sun-icon-splash{width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,#f5a623,#e8920a);animation:pulse 2s infinite;box-shadow:0 0 40px rgba(245,166,35,0.5)}
 
-#main{display:none;flex-direction:column;min-height:100dvh;position:relative;z-index:1;padding:0 0 20px}
+#main{display:none;flex-direction:column;min-height:100dvh;position:relative;z-index:1;padding:0 0 70px}
 #main.visible{display:flex}
 
 .status-bar{padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);font-family:var(--font-label)}
@@ -126,15 +126,6 @@ pointer-events:none}
       🌙 Golden Hour: <span>--</span>
     </div>
 
-    <div class="info-card" id="appsSection" style="display:none">
-      <div style="text-align:center;margin-bottom:10px">
-        <span style="font-size:13px;color:var(--amber);font-family:var(--font-label)">🚀 Apps I Build</span>
-      </div>
-      <div id="appsList" style="display:flex;flex-direction:column;gap:6px"></div>
-      <div style="text-align:center;margin-top:8px">
-        <a href="https://franciscocucullu.com/apps" target="_blank" style="color:var(--muted);font-size:11px;font-family:var(--font-label);text-decoration:none">View all →</a>
-      </div>
-    </div>
   </div>
 
   <div class="manual-input" id="manualInput" style="display:none">
@@ -144,6 +135,31 @@ pointer-events:none}
     <br><button onclick="useManualCoords()">Use Location</button>
   </div>
 </div>
+
+<!-- Apps page -->
+<div id="appsPage" style="display:none;min-height:100dvh;flex-direction:column;position:relative;z-index:1;padding:0 16px 80px">
+  <div style="text-align:center;padding:20px 0 8px">
+    <div style="font-size:10px;color:var(--amber);font-family:var(--font-label);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Indie Dev</div>
+    <h2 style="font-family:var(--font-num);font-size:24px;font-weight:700;margin-bottom:4px">Apps I Build</h2>
+    <p style="font-size:13px;color:var(--muted);font-family:var(--font-label)">Side projects shipped from scratch.</p>
+  </div>
+  <div id="appsList" style="display:flex;flex-direction:column;gap:8px;padding-top:8px"></div>
+  <div style="text-align:center;margin-top:16px">
+    <a href="https://franciscocucullu.com/apps" target="_blank" style="color:var(--muted);font-size:12px;font-family:var(--font-label);text-decoration:none">View all on franciscocucullu.com →</a>
+  </div>
+</div>
+
+<!-- Bottom nav -->
+<nav id="bottomNav" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid rgba(255,255,255,0.06);z-index:50">
+  <div style="display:flex;justify-content:space-around;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom))">
+    <button onclick="showPage('sun')" id="navSun" style="background:none;border:none;color:var(--amber);font-family:var(--font-num);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 16px">
+      <span style="font-size:20px">☀️</span>Sun
+    </button>
+    <button onclick="showPage('apps')" id="navApps" style="background:none;border:none;color:var(--muted);font-family:var(--font-num);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 16px">
+      <span style="font-size:20px">🚀</span>Apps
+    </button>
+  </div>
+</nav>
 
 <script>
 let lat = null, lng = null;
@@ -206,6 +222,7 @@ async function startApp() {
 
   document.getElementById('splash').classList.add('hidden');
   document.getElementById('main').classList.add('visible');
+  document.getElementById('bottomNav').style.display = 'block';
   setInterval(updateClock, 1000);
   function renderLoop() {
     // Tilt warning: beta ≈ 0 when flat, ≈ 90 when vertical
@@ -504,20 +521,26 @@ function drawSkyCompass() {
   ctx.fillText('ZENITH', C, C + 4);
 }
 
+function showPage(page) {
+  document.getElementById('main').style.display = page === 'sun' ? 'flex' : 'none';
+  document.getElementById('appsPage').style.display = page === 'apps' ? 'flex' : 'none';
+  document.getElementById('navSun').style.color = page === 'sun' ? 'var(--amber)' : 'var(--muted)';
+  document.getElementById('navApps').style.color = page === 'apps' ? 'var(--amber)' : 'var(--muted)';
+}
+
 // Load apps list
 fetch('https://franciscocucullu.com/api/apps.json')
   .then(r => r.json())
   .then(apps => {
     const container = document.getElementById('appsList');
-    const section = document.getElementById('appsSection');
-    if (!container || !section) return;
-    section.style.display = 'block';
+    if (!container) return;
     apps.forEach(app => {
       const a = document.createElement('a');
       a.href = app.url;
       a.target = '_blank';
-      a.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);text-decoration:none;color:#e8e8ec';
-      a.innerHTML = `<div style="flex:1"><div style="font-family:var(--font-num);font-size:14px;font-weight:700">${app.title}</div><div style="font-size:11px;color:var(--muted);font-family:var(--font-label);line-height:1.3;margin-top:2px">${app.description.split('.')[0]}</div></div><span style="color:var(--muted);font-size:12px">→</span>`;
+      a.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);text-decoration:none;color:#e8e8ec';
+      const tags = (app.tags||[]).slice(0,3).map(t => `<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:rgba(245,166,35,0.1);color:var(--muted)">${t}</span>`).join('');
+      a.innerHTML = `<div style="flex:1"><div style="font-family:var(--font-num);font-size:15px;font-weight:700">${app.title}</div><div style="font-size:11px;color:var(--muted);font-family:var(--font-label);line-height:1.4;margin-top:3px">${app.description.split('.')[0]}.</div><div style="display:flex;gap:4px;margin-top:4px">${tags}</div></div><span style="color:var(--amber);font-size:13px">→</span>`;
       container.appendChild(a);
     });
   }).catch(() => {});

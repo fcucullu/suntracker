@@ -157,6 +157,7 @@ pointer-events:none}
 <script>
 let lat = null, lng = null;
 let heading = null;
+let pitch = null; // device tilt (beta) — degrees from horizontal
 let hasCamera = false;
 let hasOrientation = false;
 let sunCalcLoaded = typeof SunCalc !== 'undefined';
@@ -223,12 +224,17 @@ async function startApp() {
   if (hasOrientation) {
     window.addEventListener('deviceorientation', (e) => {
       if (e.alpha !== null) {
-        // Normalize: iOS gives compass heading, Android varies
         if (e.webkitCompassHeading !== undefined) {
           heading = e.webkitCompassHeading;
         } else {
           heading = (360 - e.alpha) % 360;
         }
+      }
+      // Beta = front-back tilt. When phone is vertical (portrait), beta ≈ 90.
+      // When pointing at horizon, beta ≈ 90. Pointing at sky, beta ≈ 0.
+      // Camera "look angle" above horizon = 90 - beta
+      if (e.beta !== null) {
+        pitch = 90 - e.beta; // 0 = looking at horizon, 90 = looking straight up
       }
     }, true);
   }
@@ -335,13 +341,22 @@ function update() {
 }
 
 function azElToScreen(az, el, heading, W, H) {
+  // Horizontal: delta between sun azimuth and phone heading
   let delta = (az - heading + 360) % 360;
   if (delta > 180) delta -= 360;
   const xPercent = 50 + (delta / 90) * 50;
-  const yPercent = 50 - (el / 90) * 80;
+
+  // Vertical: use phone tilt (pitch) to map elevation to screen
+  // pitch = angle phone is looking above horizon
+  // Camera vertical FOV ≈ 50-60 degrees, use 55 as estimate
+  const vFov = 55;
+  const lookAngle = pitch !== null ? pitch : 20; // default assume slight tilt up
+  const elDelta = el - lookAngle; // difference between sun elevation and where phone points
+  const yPercent = 50 - (elDelta / (vFov / 2)) * 50;
+
   const x = (xPercent / 100) * W;
-  const y = Math.max(H * 0.05, Math.min(H * 0.95, (yPercent / 100) * H));
-  return { x, y, xPercent };
+  const y = Math.max(H * 0.02, Math.min(H * 0.98, (yPercent / 100) * H));
+  return { x, y, xPercent, yPercent };
 }
 
 function drawOverlay(sunAz, sunEl) {

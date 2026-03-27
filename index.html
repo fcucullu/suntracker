@@ -126,9 +126,15 @@ pointer-events:none}
       🌙 Golden Hour: <span>--</span>
     </div>
 
-    <a href="https://franciscocucullu.com/apps" target="_blank" class="info-card" style="display:block;text-align:center;text-decoration:none;color:var(--muted);font-size:13px;font-family:var(--font-label)">
-      🚀 More Apps
-    </a>
+    <div class="info-card" id="appsSection" style="display:none">
+      <div style="text-align:center;margin-bottom:10px">
+        <span style="font-size:13px;color:var(--amber);font-family:var(--font-label)">🚀 Apps I Build</span>
+      </div>
+      <div id="appsList" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="text-align:center;margin-top:8px">
+        <a href="https://franciscocucullu.com/apps" target="_blank" style="color:var(--muted);font-size:11px;font-family:var(--font-label);text-decoration:none">View all →</a>
+      </div>
+    </div>
   </div>
 
   <div class="manual-input" id="manualInput" style="display:none">
@@ -497,6 +503,24 @@ function drawSkyCompass() {
   ctx.textAlign = 'center';
   ctx.fillText('ZENITH', C, C + 4);
 }
+
+// Load apps list
+fetch('https://franciscocucullu.com/api/apps.json')
+  .then(r => r.json())
+  .then(apps => {
+    const container = document.getElementById('appsList');
+    const section = document.getElementById('appsSection');
+    if (!container || !section) return;
+    section.style.display = 'block';
+    apps.forEach(app => {
+      const a = document.createElement('a');
+      a.href = app.url;
+      a.target = '_blank';
+      a.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);text-decoration:none;color:#e8e8ec';
+      a.innerHTML = `<div style="flex:1"><div style="font-family:var(--font-num);font-size:14px;font-weight:700">${app.title}</div><div style="font-size:11px;color:var(--muted);font-family:var(--font-label);line-height:1.3;margin-top:2px">${app.description.split('.')[0]}</div></div><span style="color:var(--muted);font-size:12px">→</span>`;
+      container.appendChild(a);
+    });
+  }).catch(() => {});
 
 // Register service worker
 if ('serviceWorker' in navigator) {

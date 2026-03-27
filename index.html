@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="google" content="notranslate">
+<title>Sun Tracker</title>
+<link rel="manifest" href="data:application/json,{%22name%22:%22Sun%20Tracker%22,%22short_name%22:%22SunTracker%22,%22display%22:%22standalone%22,%22background_color%22:%220a0a0f%22,%22theme_color%22:%22f5a623%22,%22start_url%22:%22.%22,%22icons%22:[]}">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Libre+Baskerville:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0a0a0f;--amber:#f5a623;--muted:#7a8fa6;--card:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.06);--font-num:'Rajdhani',sans-serif;--font-label:'Libre Baskerville',serif}
+body{background:var(--bg);color:#e8e8ec;font-family:var(--font-num);overflow:hidden;height:100dvh;width:100vw;position:relative}
+
+/* Star field */
+body::before{content:'';position:fixed;inset:0;z-index:0;
+background:
+  radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,0.3),transparent),
+  radial-gradient(1px 1px at 30% 70%,rgba(255,255,255,0.2),transparent),
+  radial-gradient(1px 1px at 50% 10%,rgba(255,255,255,0.25),transparent),
+  radial-gradient(1px 1px at 70% 40%,rgba(255,255,255,0.15),transparent),
+  radial-gradient(1px 1px at 90% 80%,rgba(255,255,255,0.3),transparent),
+  radial-gradient(1px 1px at 15% 90%,rgba(255,255,255,0.2),transparent),
+  radial-gradient(1px 1px at 45% 55%,rgba(255,255,255,0.15),transparent),
+  radial-gradient(1px 1px at 85% 15%,rgba(255,255,255,0.2),transparent),
+  radial-gradient(1px 1px at 60% 85%,rgba(255,255,255,0.25),transparent),
+  radial-gradient(1px 1px at 25% 45%,rgba(255,255,255,0.1),transparent);
+pointer-events:none}
+
+/* Splash */
+#splash{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity 0.4s}
+#splash.hidden{opacity:0;pointer-events:none}
+#splash h1{font-family:var(--font-label);font-size:28px;color:var(--amber)}
+#splash p{color:var(--muted);font-size:14px;font-family:var(--font-label)}
+#splash button{background:var(--amber);color:#0a0a0f;border:none;padding:14px 40px;border-radius:12px;font-family:var(--font-num);font-size:18px;font-weight:700;cursor:pointer}
+.sun-icon-splash{width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,#f5a623,#e8920a);animation:pulse 2s infinite;box-shadow:0 0 40px rgba(245,166,35,0.5)}
+
+/* Main UI */
+#main{display:none;flex-direction:column;height:100dvh;position:relative;z-index:1}
+#main.visible{display:flex}
+
+/* Status bar */
+.status-bar{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);font-family:var(--font-label);z-index:10;background:rgba(10,10,15,0.8);backdrop-filter:blur(12px)}
+.status-bar .location{display:flex;align-items:center;gap:6px}
+
+/* Camera container */
+.camera-wrap{flex:1;position:relative;overflow:hidden;min-height:0}
+.camera-wrap video{width:100%;height:100%;object-fit:cover}
+.camera-wrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.camera-wrap .hint{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:13px;color:rgba(255,255,255,0.5);font-family:var(--font-label);transition:opacity 1s;z-index:5}
+.camera-wrap .hint.hidden{opacity:0}
+.horizon-line{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,0.15);z-index:4;pointer-events:none}
+.no-camera{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-family:var(--font-label);font-size:14px;text-align:center;padding:20px}
+
+/* Compass rose */
+.compass-rose{position:absolute;bottom:12px;right:12px;width:60px;height:60px;z-index:5}
+.compass-rose canvas{width:60px;height:60px}
+
+/* Stats panels */
+.stats{display:grid;gap:1px;background:var(--border);z-index:10}
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:1px}
+.stat-card{background:rgba(10,10,15,0.9);backdrop-filter:blur(12px);padding:12px 16px}
+.stat-card.full{grid-column:1/-1}
+.stat-label{font-family:var(--font-label);font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px}
+.stat-value{font-family:var(--font-num);font-size:28px;font-weight:700;line-height:1;transition:color 0.3s}
+.stat-value.flash{color:var(--amber)}
+.stat-sub{font-family:var(--font-num);font-size:13px;color:var(--muted);margin-top:2px}
+.sunrise-sunset{display:flex;justify-content:space-around;padding:12px 16px;background:rgba(10,10,15,0.9);backdrop-filter:blur(12px)}
+.ss-item{text-align:center}
+.ss-item .ss-icon{font-size:20px;margin-bottom:4px}
+.ss-item .ss-time{font-family:var(--font-num);font-size:22px;font-weight:700}
+.ss-item .ss-dir{font-family:var(--font-num);font-size:12px;color:var(--muted)}
+.golden-hour{background:rgba(10,10,15,0.9);backdrop-filter:blur(12px);padding:10px 16px;text-align:center;font-size:13px;color:var(--muted);border-top:1px solid var(--border)}
+.golden-hour span{color:var(--amber)}
+
+/* Manual input */
+.manual-input{padding:20px;text-align:center}
+.manual-input input{background:rgba(255,255,255,0.08);border:1px solid var(--border);border-radius:8px;padding:10px;color:#e8e8ec;font-family:var(--font-num);font-size:16px;width:120px;margin:4px;text-align:center}
+.manual-input button{background:var(--amber);color:#0a0a0f;border:none;padding:10px 24px;border-radius:8px;font-family:var(--font-num);font-weight:700;margin-top:8px;cursor:pointer}
+
+/* Loading skeleton */
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;height:28px;width:80px;display:inline-block}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.2);opacity:0.7}}
+</style>
+</head>
+<body>
+
+<!-- Splash Screen -->
+<div id="splash">
+  <div class="sun-icon-splash"></div>
+  <h1>Sun Tracker</h1>
+  <p>See where the sun is, right now.</p>
+  <button id="startBtn" onclick="startApp()">Tap to Start</button>
+</div>
+
+<!-- Main UI -->
+<div id="main">
+  <div class="status-bar">
+    <div class="location">📍 <span id="locationName">Locating...</span></div>
+    <div id="clock">--:--:--</div>
+  </div>
+
+  <div class="camera-wrap" id="cameraWrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <div class="horizon-line"></div>
+    <div class="hint" id="hint">↑ Point phone toward sun</div>
+    <div class="compass-rose"><canvas id="compassCanvas" width="120" height="120"></canvas></div>
+  </div>
+
+  <div id="noCameraMsg" class="no-camera" style="display:none">
+    Camera not available.<br>Compass-only mode.
+  </div>
+
+  <div class="stats">
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Azimuth</div>
+        <div class="stat-value" id="azimuthVal"><span class="skeleton"></span></div>
+        <div class="stat-sub" id="azimuthDir">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Elevation</div>
+        <div class="stat-value" id="elevationVal"><span class="skeleton"></span></div>
+        <div class="stat-sub" id="elevationSub">--</div>
+      </div>
+    </div>
+    <div class="sunrise-sunset">
+      <div class="ss-item">
+        <div class="ss-icon">🌅</div>
+        <div class="ss-time" id="sunriseTime">--:--</div>
+        <div class="ss-dir" id="sunriseDir">--</div>
+      </div>
+      <div class="ss-item">
+        <div class="ss-icon">🌇</div>
+        <div class="ss-time" id="sunsetTime">--:--</div>
+        <div class="ss-dir" id="sunsetDir">--</div>
+      </div>
+    </div>
+    <div class="golden-hour" id="goldenHour">🌙 Golden Hour: <span>--</span></div>
+  </div>
+
+  <div class="manual-input" id="manualInput" style="display:none">
+    <p style="color:var(--muted);font-family:var(--font-label);font-size:13px;margin-bottom:8px">GPS unavailable. Enter coordinates:</p>
+    <input id="manLat" type="number" step="any" placeholder="Latitude">
+    <input id="manLng" type="number" step="any" placeholder="Longitude">
+    <br>
+    <button onclick="useManualCoords()">Use Location</button>
+  </div>
+</div>
+
+<script>
+let lat = null, lng = null;
+let heading = null;
+let hasCamera = false;
+let hasOrientation = false;
+let sunCalcLoaded = typeof SunCalc !== 'undefined';
+
+// Cardinal direction helper
+function toCardinal(deg) {
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function toCardinalFull(deg) {
+  if (deg >= 337.5 || deg < 22.5) return 'N';
+  if (deg < 67.5) return 'NE';
+  if (deg < 112.5) return 'E';
+  if (deg < 157.5) return 'SE';
+  if (deg < 202.5) return 'S';
+  if (deg < 247.5) return 'SW';
+  if (deg < 292.5) return 'W';
+  return 'NW';
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function formatTime(d) {
+  if (!d || isNaN(d.getTime())) return '--:--';
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+// Flash animation
+function flash(el) {
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 300);
+}
+
+// Start app (splash tap)
+async function startApp() {
+  // Request camera
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    document.getElementById('video').srcObject = stream;
+    hasCamera = true;
+    // Size overlay canvas
+    const video = document.getElementById('video');
+    video.addEventListener('loadedmetadata', () => {
+      const c = document.getElementById('overlay');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+    });
+  } catch(e) {
+    document.getElementById('cameraWrap').style.display = 'none';
+    document.getElementById('noCameraMsg').style.display = 'flex';
+  }
+
+  // Request orientation (iOS)
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm === 'granted') hasOrientation = true;
+    } catch(e) {}
+  } else {
+    hasOrientation = true;
+  }
+
+  if (hasOrientation) {
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.alpha !== null) {
+        // Normalize: iOS gives compass heading, Android varies
+        if (e.webkitCompassHeading !== undefined) {
+          heading = e.webkitCompassHeading;
+        } else {
+          heading = (360 - e.alpha) % 360;
+        }
+      }
+    }, true);
+  }
+
+  // Geolocation
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(
+      (pos) => {
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        reverseGeocode(lat, lng);
+        updateSunTimes();
+      },
+      () => {
+        document.getElementById('locationName').textContent = 'GPS denied';
+        document.getElementById('manualInput').style.display = 'block';
+      },
+      { enableHighAccuracy: true }
+    );
+  } else {
+    document.getElementById('locationName').textContent = 'No GPS';
+    document.getElementById('manualInput').style.display = 'block';
+  }
+
+  // Hide splash
+  document.getElementById('splash').classList.add('hidden');
+  document.getElementById('main').classList.add('visible');
+
+  // Hide hint after 5s
+  setTimeout(() => document.getElementById('hint').classList.add('hidden'), 5000);
+
+  // Start update loop
+  setInterval(update, 1000);
+  update();
+}
+
+function useManualCoords() {
+  lat = parseFloat(document.getElementById('manLat').value);
+  lng = parseFloat(document.getElementById('manLng').value);
+  if (isNaN(lat) || isNaN(lng)) return;
+  document.getElementById('manualInput').style.display = 'none';
+  document.getElementById('locationName').textContent = lat.toFixed(2) + ', ' + lng.toFixed(2);
+  updateSunTimes();
+}
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+    const data = await res.json();
+    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+    document.getElementById('locationName').textContent = city || (lat.toFixed(2) + ', ' + lng.toFixed(2));
+  } catch(e) {
+    document.getElementById('locationName').textContent = lat.toFixed(2) + ', ' + lng.toFixed(2);
+  }
+}
+
+function updateSunTimes() {
+  if (!lat || !sunCalcLoaded) return;
+  const times = SunCalc.getTimes(new Date(), lat, lng);
+
+  document.getElementById('sunriseTime').textContent = formatTime(times.sunrise);
+  document.getElementById('sunsetTime').textContent = formatTime(times.sunset);
+
+  const sunrisePos = SunCalc.getPosition(times.sunrise, lat, lng);
+  const sunsetPos = SunCalc.getPosition(times.sunset, lat, lng);
+  const srAz = (sunrisePos.azimuth * 180 / Math.PI + 180) % 360;
+  const ssAz = (sunsetPos.azimuth * 180 / Math.PI + 180) % 360;
+
+  document.getElementById('sunriseDir').textContent = toCardinalFull(srAz) + ' ' + srAz.toFixed(1) + '°';
+  document.getElementById('sunsetDir').textContent = toCardinalFull(ssAz) + ' ' + ssAz.toFixed(1) + '°';
+
+  // Golden hour
+  const gh = times.goldenHour;
+  if (gh && !isNaN(gh.getTime())) {
+    document.getElementById('goldenHour').innerHTML = '🌙 Golden Hour: <span>' + formatTime(gh) + ' – ' + formatTime(times.sunset) + '</span>';
+  }
+}
+
+function update() {
+  // Clock
+  const now = new Date();
+  document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+
+  if (!lat || !sunCalcLoaded) return;
+
+  // Sun position
+  const pos = SunCalc.getPosition(now, lat, lng);
+  const azimuth = (pos.azimuth * 180 / Math.PI + 180) % 360;
+  const elevation = pos.altitude * 180 / Math.PI;
+
+  const azEl = document.getElementById('azimuthVal');
+  const elEl = document.getElementById('elevationVal');
+  azEl.textContent = azimuth.toFixed(1) + '°';
+  elEl.textContent = elevation.toFixed(1) + '°';
+  flash(azEl);
+  flash(elEl);
+
+  document.getElementById('azimuthDir').textContent = toCardinalFull(azimuth);
+  document.getElementById('elevationSub').textContent = elevation > 0 ? 'above horizon' : 'below horizon';
+
+  // Draw overlay
+  drawOverlay(azimuth, elevation);
+  drawCompass();
+}
+
+function drawOverlay(sunAz, sunEl) {
+  const canvas = document.getElementById('overlay');
+  if (!canvas || !hasCamera) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  if (heading === null) return;
+
+  // Calculate delta
+  let delta = (sunAz - heading + 360) % 360;
+  if (delta > 180) delta -= 360;
+
+  const xPercent = 50 + (delta / 90) * 50;
+  const yPercent = 50 - (sunEl / 90) * 80;
+  const x = (xPercent / 100) * W;
+  const y = Math.max(H * 0.05, Math.min(H * 0.95, (yPercent / 100) * H));
+
+  // Only draw if roughly on screen
+  if (xPercent >= -20 && xPercent <= 120) {
+    const r = 20 * (W / 400);
+
+    if (sunEl <= 0) {
+      // Below horizon — dashed circle
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(245, 166, 35, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Label
+      ctx.fillStyle = 'rgba(245, 166, 35, 0.7)';
+      ctx.font = `${12 * (W/400)}px Rajdhani`;
+      ctx.textAlign = 'center';
+      ctx.fillText('↓ Below horizon', x, y + r + 16 * (W/400));
+    } else {
+      // Glowing sun dot
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 2);
+      grad.addColorStop(0, 'rgba(245, 166, 35, 0.9)');
+      grad.addColorStop(0.3, 'rgba(245, 166, 35, 0.4)');
+      grad.addColorStop(1, 'rgba(245, 166, 35, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core
+      ctx.fillStyle = '#f5a623';
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawCompass() {
+  const canvas = document.getElementById('compassCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const s = 120;
+  const c = s / 2;
+  ctx.clearRect(0, 0, s, s);
+
+  const h = heading !== null ? heading : 0;
+
+  // Circle
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(c, c, c - 8, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Cardinal directions
+  ctx.fillStyle = 'rgba(122, 143, 166, 0.7)';
+  ctx.font = '10px Rajdhani';
+  ctx.textAlign = 'center';
+  const dirs = [['N', 0], ['E', 90], ['S', 180], ['W', 270]];
+  dirs.forEach(([label, angle]) => {
+    const a = ((angle - h) * Math.PI / 180) - Math.PI / 2;
+    const r = c - 16;
+    const x = c + Math.cos(a) * r;
+    const y = c + Math.sin(a) * r;
+    ctx.fillStyle = label === 'N' ? '#f5a623' : 'rgba(122,143,166,0.7)';
+    ctx.fillText(label, x, y + 4);
+  });
+
+  // Heading tick (top)
+  ctx.fillStyle = '#f5a623';
+  ctx.beginPath();
+  ctx.moveTo(c, 4);
+  ctx.lineTo(c - 4, 12);
+  ctx.lineTo(c + 4, 12);
+  ctx.fill();
+}
+
+// Register minimal service worker for offline
+if ('serviceWorker' in navigator) {
+  const swCode = `self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const c=res.clone();caches.open('suntracker-v1').then(cache=>cache.put(e.request,c))}return res}).catch(()=>caches.match(e.request)))});`;
+  const blob = new Blob([swCode], { type: 'application/javascript' });
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+}
+</script>
+</body>
+</html>

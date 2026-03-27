@@ -85,6 +85,10 @@ pointer-events:none}
 
   <div class="sky-compass">
     <canvas id="skyCanvas" width="720" height="720"></canvas>
+    <div id="tiltWarning" style="display:none;position:absolute;inset:0;background:rgba(10,10,15,0.85);border-radius:50%;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:5">
+      <div style="font-size:40px">📱</div>
+      <div style="font-family:var(--font-label);font-size:14px;color:var(--amber);text-align:center;padding:0 30px">Place your phone flat<br>on a horizontal surface</div>
+    </div>
   </div>
 
   <div class="stats">
@@ -132,6 +136,7 @@ pointer-events:none}
 <script>
 let lat = null, lng = null;
 let heading = null;
+let phoneBeta = null; // phone tilt angle
 const sunCalcLoaded = typeof SunCalc !== 'undefined';
 
 function toCardinal(deg) {
@@ -157,6 +162,7 @@ async function startApp() {
   window.addEventListener('deviceorientation', (e) => {
     if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading;
     else if (e.alpha !== null) heading = (360 - e.alpha) % 360;
+    if (e.beta !== null) phoneBeta = e.beta;
   }, true);
 
   if (navigator.geolocation) {
@@ -173,7 +179,16 @@ async function startApp() {
   document.getElementById('splash').classList.add('hidden');
   document.getElementById('main').classList.add('visible');
   setInterval(updateClock, 1000);
-  function renderLoop() { drawSkyCompass(); requestAnimationFrame(renderLoop); }
+  function renderLoop() {
+    // Tilt warning: beta ≈ 0 when flat, ≈ 90 when vertical
+    const tiltEl = document.getElementById('tiltWarning');
+    if (phoneBeta !== null && tiltEl) {
+      const isFlat = Math.abs(phoneBeta) < 25; // within 25° of horizontal
+      tiltEl.style.display = isFlat ? 'none' : 'flex';
+    }
+    drawSkyCompass();
+    requestAnimationFrame(renderLoop);
+  }
   renderLoop();
 }
 
@@ -390,7 +405,7 @@ function drawSkyCompass() {
     ctx.arc(sx, sy, 8, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    // Below horizon — dashed circle
+    // Below horizon — dashed circle (no label)
     ctx.setLineDash([3, 3]);
     ctx.strokeStyle = 'rgba(245,166,35,0.5)';
     ctx.lineWidth = 2;
@@ -398,10 +413,6 @@ function drawSkyCompass() {
     ctx.arc(sx, sy, 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(245,166,35,0.5)';
-    ctx.font = '11px Rajdhani';
-    ctx.textAlign = 'center';
-    ctx.fillText('below horizon', sx, sy + 20);
   }
 
   // Center label

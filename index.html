@@ -159,11 +159,28 @@ async function startApp() {
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try { await DeviceOrientationEvent.requestPermission(); } catch(e) {}
   }
-  window.addEventListener('deviceorientation', (e) => {
-    if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading;
-    else if (e.alpha !== null) heading = (360 - e.alpha) % 360;
+  // Use 'deviceorientationabsolute' on Android for true compass heading
+  // Falls back to 'deviceorientation' with webkitCompassHeading on iOS
+  function handleOrientation(e) {
+    if (e.webkitCompassHeading !== undefined) {
+      // iOS: webkitCompassHeading is degrees from North, clockwise
+      heading = e.webkitCompassHeading;
+    } else if (e.alpha !== null && e.absolute) {
+      // Android absolute: alpha is degrees from North, counterclockwise
+      heading = (360 - e.alpha) % 360;
+    } else if (e.alpha !== null) {
+      // Android non-absolute: alpha is relative (unreliable for compass)
+      heading = (360 - e.alpha) % 360;
+    }
     if (e.beta !== null) phoneBeta = e.beta;
-  }, true);
+  }
+
+  // Prefer absolute orientation (Android)
+  if ('ondeviceorientationabsolute' in window) {
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+  } else {
+    window.addEventListener('deviceorientation', handleOrientation, true);
+  }
 
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition(

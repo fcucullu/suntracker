@@ -340,6 +340,10 @@ function drawSkyCompass() {
   // Rotation: if we have heading, rotate so phone's direction is at top
   const rot = heading !== null ? -heading * Math.PI / 180 : 0;
 
+  // Debug: show rot value
+  let dbg = document.getElementById('dbg');
+  if (dbg) dbg.textContent = `head:${heading?.toFixed(0)} rot:${(rot*180/Math.PI).toFixed(0)}° scrn:${screen.orientation?.angle ?? '?'}`;
+
   // --- Background circle (horizon) ---
   ctx.fillStyle = 'rgba(255,255,255,0.02)';
   ctx.beginPath();

@@ -184,6 +184,11 @@ function formatTime(d) { return (!d || isNaN(d.getTime())) ? '--:--' : pad(d.get
 function flash(el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 300); }
 
 async function startApp() {
+  // Lock screen to portrait so compass orientation stays consistent
+  try {
+    await screen.orientation?.lock?.('portrait');
+  } catch(e) { /* not all browsers support this */ }
+
   // Request orientation for compass (optional — enriches the diagram)
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try { await DeviceOrientationEvent.requestPermission(); } catch(e) {}
@@ -329,11 +334,7 @@ function drawSkyCompass() {
   ctx.clearRect(0, 0, S, S);
 
   // Rotation: if we have heading, rotate so phone's direction is at top
-  // Compensate for screen orientation (portrait vs landscape) so the compass stays fixed to the real world
-  // On Android, deviceorientation alpha adjusts for screen rotation, but the canvas also rotates,
-  // so we need to subtract the screen angle to keep the compass fixed to the real world
-  const screenAngle = (typeof screen.orientation !== 'undefined') ? screen.orientation.angle : (window.orientation || 0);
-  const rot = heading !== null ? -(heading - screenAngle) * Math.PI / 180 : 0;
+  const rot = heading !== null ? -heading * Math.PI / 180 : 0;
 
   // --- Background circle (horizon) ---
   ctx.fillStyle = 'rgba(255,255,255,0.02)';

@@ -199,12 +199,16 @@ async function startApp() {
     if (e.webkitCompassHeading !== undefined) {
       heading = e.webkitCompassHeading;
     } else if (e.alpha !== null) {
-      // Android: try both absolute and relative
-      // absolute: alpha = degrees from North, but direction varies by device
       heading = e.alpha;
     }
     if (e.beta !== null) phoneBeta = e.beta;
 
+    // Debug overlay — remove after fixing
+    let dbg = document.getElementById('dbg');
+    if (!dbg) { dbg = document.createElement('div'); dbg.id = 'dbg'; dbg.style.cssText = 'position:fixed;top:0;left:0;z-index:9999;background:rgba(0,0,0,0.8);color:#0f0;font:11px monospace;padding:6px;pointer-events:none'; document.body.appendChild(dbg); }
+    const so = screen.orientation?.angle ?? '?';
+    const wo = window.orientation ?? '?';
+    dbg.textContent = `α:${e.alpha?.toFixed(0)} β:${e.beta?.toFixed(0)} γ:${e.gamma?.toFixed(0)} | scrn:${so} win:${wo} | head:${heading?.toFixed(0)}`;
   }
 
   // Prefer absolute orientation (Android)

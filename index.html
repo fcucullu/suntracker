@@ -203,12 +203,6 @@ async function startApp() {
     }
     if (e.beta !== null) phoneBeta = e.beta;
 
-    // Debug overlay — remove after fixing
-    let dbg = document.getElementById('dbg');
-    if (!dbg) { dbg = document.createElement('div'); dbg.id = 'dbg'; dbg.style.cssText = 'position:fixed;top:0;left:0;z-index:9999;background:rgba(0,0,0,0.8);color:#0f0;font:11px monospace;padding:6px;pointer-events:none'; document.body.appendChild(dbg); }
-    const so = screen.orientation?.angle ?? '?';
-    const wo = window.orientation ?? '?';
-    dbg.textContent = `α:${e.alpha?.toFixed(0)} β:${e.beta?.toFixed(0)} γ:${e.gamma?.toFixed(0)} | scrn:${so} win:${wo} | head:${heading?.toFixed(0)}`;
   }
 
   // Prefer absolute orientation (Android)
@@ -339,10 +333,6 @@ function drawSkyCompass() {
 
   // Rotation: if we have heading, rotate so phone's direction is at top
   const rot = heading !== null ? -heading * Math.PI / 180 : 0;
-
-  // Debug: show rot value
-  let dbg = document.getElementById('dbg');
-  if (dbg) dbg.textContent = `head:${heading?.toFixed(0)} rot:${(rot*180/Math.PI).toFixed(0)}° scrn:${screen.orientation?.angle ?? '?'}`;
 
   // --- Background circle (horizon) ---
   ctx.fillStyle = 'rgba(255,255,255,0.02)';

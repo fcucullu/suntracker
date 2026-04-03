@@ -329,7 +329,9 @@ function drawSkyCompass() {
   ctx.clearRect(0, 0, S, S);
 
   // Rotation: if we have heading, rotate so phone's direction is at top
-  const rot = heading !== null ? -heading * Math.PI / 180 : 0;
+  // Compensate for screen orientation (portrait vs landscape) so the compass stays fixed to the real world
+  const screenAngle = window.screen?.orientation?.angle || window.orientation || 0;
+  const rot = heading !== null ? -(heading + screenAngle) * Math.PI / 180 : 0;
 
   // --- Background circle (horizon) ---
   ctx.fillStyle = 'rgba(255,255,255,0.02)';

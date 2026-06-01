@@ -561,11 +561,40 @@ fetch('https://franciscocucullu.com/api/apps.json')
     });
   }).catch(() => {});
 
-// Register service worker
+// Register service worker (real /sw.js so the page is installable at root scope)
 if ('serviceWorker' in navigator) {
-  const sw = `self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const c=res.clone();caches.open('st-v2').then(cache=>cache.put(e.request,c))}return res}).catch(()=>caches.match(e.request)))});`;
-  navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
+
+// Install prompt (native-PWA install banner)
+(function(){
+  var KEY='sunpath_install_dismissed', DAYS=7;
+  if (new URLSearchParams(location.search).has('reinstall')) localStorage.removeItem(KEY);
+  function dismissed(){ var d=localStorage.getItem(KEY); return d && (Date.now()-parseInt(d,10) < DAYS*86400000); }
+  function standalone(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
+  var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var banner=document.getElementById('installBanner');
+  var btn=document.getElementById('installBtn');
+  var txt=document.getElementById('installText');
+  var deferred=null;
+  function show(){ if(standalone()||dismissed()||!banner) return; banner.style.display='block'; }
+  if(banner){
+    document.getElementById('installClose').onclick=function(){ localStorage.setItem(KEY,Date.now().toString()); banner.style.display='none'; };
+    if(isIOS){ btn.style.display='none'; txt.innerHTML='Tap the Share button in Safari, then “Add to Home Screen”.'; show(); }
+    btn.onclick=async function(){ if(!deferred) return; deferred.prompt(); var c=await deferred.userChoice; if(c.outcome==='accepted'){ localStorage.setItem(KEY,Date.now().toString()); banner.style.display='none'; } deferred=null; };
+  }
+  window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferred=e; show(); });
+})();
 </script>
+<div id="installBanner" style="display:none;position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;max-width:420px;margin:0 auto;background:#141420;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,0.5);font-family:var(--font-label,system-ui)">
+  <div style="display:flex;align-items:flex-start;gap:12px">
+    <div style="flex:1">
+      <div style="font-weight:700;color:#e8e8ec;font-size:14px;margin-bottom:2px">Install SunPath</div>
+      <div id="installText" style="font-size:12px;color:#9a9aa5;line-height:1.4">Add it to your home screen for quick access</div>
+      <button id="installBtn" style="margin-top:10px;background:#f5a623;color:#0a0a0f;border:none;font-weight:600;font-size:12px;padding:8px 16px;border-radius:10px;cursor:pointer">Install</button>
+    </div>
+    <button id="installClose" aria-label="Dismiss" style="background:none;border:none;color:#9a9aa5;font-size:20px;cursor:pointer;line-height:1">&times;</button>
+  </div>
+</div>
 </body>
 </html>

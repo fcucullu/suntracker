@@ -566,24 +566,27 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
 
-// Install prompt (native-PWA install banner)
+// Install prompt (PWA install banner)
 (function(){
   var KEY='sunpath_install_dismissed', DAYS=7;
   if (new URLSearchParams(location.search).has('reinstall')) localStorage.removeItem(KEY);
   function dismissed(){ var d=localStorage.getItem(KEY); return d && (Date.now()-parseInt(d,10) < DAYS*86400000); }
   function standalone(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
   var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  var banner=document.getElementById('installBanner');
-  var btn=document.getElementById('installBtn');
-  var txt=document.getElementById('installText');
-  var deferred=null;
-  function show(){ if(standalone()||dismissed()||!banner) return; banner.style.display='block'; }
-  if(banner){
+  var deferred=null, banner=null, btn=null, txt=null;
+  function tryShow(){ if(!banner || standalone() || dismissed()) return; banner.style.display='block'; }
+  // beforeinstallprompt can fire before DOM is ready — capture it either way.
+  window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferred=e; tryShow(); });
+  document.addEventListener('DOMContentLoaded',function(){
+    banner=document.getElementById('installBanner');
+    btn=document.getElementById('installBtn');
+    txt=document.getElementById('installText');
+    if(!banner) return;
     document.getElementById('installClose').onclick=function(){ localStorage.setItem(KEY,Date.now().toString()); banner.style.display='none'; };
-    if(isIOS){ btn.style.display='none'; txt.innerHTML='Tap the Share button in Safari, then “Add to Home Screen”.'; show(); }
+    if(isIOS){ btn.style.display='none'; txt.innerHTML='Tap the Share button in Safari, then “Add to Home Screen”.'; tryShow(); }
     btn.onclick=async function(){ if(!deferred) return; deferred.prompt(); var c=await deferred.userChoice; if(c.outcome==='accepted'){ localStorage.setItem(KEY,Date.now().toString()); banner.style.display='none'; } deferred=null; };
-  }
-  window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferred=e; show(); });
+    if(deferred) tryShow();
+  });
 })();
 </script>
 <div id="installBanner" style="display:none;position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;max-width:420px;margin:0 auto;background:#141420;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,0.5);font-family:var(--font-label,system-ui)">
